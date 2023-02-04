@@ -1,11 +1,9 @@
-obj-m += fast-classifier.o
+obj-$(CONFIG_FAST_CLASSIFIER) += fast-classifier.o
 
-ifeq ($(SFE_SUPPORT_IPV6),y)
+ifeq ($(SFE_SUPPORT_IPV6),)
 SFE_SUPPORT_IPV6=y
-ccflags-$(SFE_SUPPORT_IPV6) += -DSFE_SUPPORT_IPV6 -Wno-format
-else
-ccflags-$(SFE_SUPPORT_IPV6) += -Wno-format
 endif
+ccflags-$(SFE_SUPPORT_IPV6) += -DSFE_SUPPORT_IPV6
 
 ccflags-y += -I$(obj)/../shortcut-fe
 

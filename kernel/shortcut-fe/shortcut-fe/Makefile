@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2014 The Linux Foundation. All rights reserved.
+# Copyright (c) 2013-2018, 2020 The Linux Foundation. All rights reserved.
 # Permission to use, copy, modify, and/or distribute this software for
 # any purpose with or without fee is hereby granted, provided that the
 # above copyright notice and this permission notice appear in all copies.
@@ -11,23 +11,31 @@
 # ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 # OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
+
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
-include $(INCLUDE_DIR)/package.mk
 
 PKG_NAME:=shortcut-fe
-PKG_RELEASE:=1
-PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
+PKG_RELEASE:=8
+
+include $(INCLUDE_DIR)/package.mk
 
 define KernelPackage/shortcut-fe
   SECTION:=kernel
   CATEGORY:=Kernel modules
   SUBMENU:=Network Support
-  DEPENDS:=
+  DEPENDS:=@IPV6 +kmod-nf-conntrack
   TITLE:=Kernel driver for SFE
-  FILES:=$(PKG_BUILD_DIR)/$(PKG_NAME).ko
-  KCONFIG:=CONFIG_NF_CONNTRACK_EVENTS=y
-  AUTOLOAD:=$(call AutoLoad,09,shortcut-fe)
+  FILES:= \
+	   $(PKG_BUILD_DIR)/shortcut-fe.ko \
+	   $(PKG_BUILD_DIR)/shortcut-fe-ipv6.ko
+  KCONFIG:= \
+	   CONFIG_NF_CONNTRACK_EVENTS=y \
+	   CONFIG_NF_CONNTRACK_TIMEOUT=y \
+	   CONFIG_SHORTCUT_FE=y \
+	   CONFIG_XFRM=y
+  PROVIDES:=$(PKG_NAME)
+  AUTOLOAD:=$(call AutoLoad,09,shortcut-fe shortcut-fe-ipv6)
 endef
 
 define KernelPackage/shortcut-fe/Description
@@ -35,11 +43,11 @@ Shortcut is an in-Linux-kernel IP packet forwarding engine.
 endef
 
 define KernelPackage/shortcut-fe/install
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/etc/init.d/shortcut-fe $(1)/etc/init.d
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) ./files/usr/bin/sfe_dump $(1)/usr/bin
 endef
+
+HAVE_ECM:=$(CONFIG_PACKAGE_kmod-qca-nss-ecm-premium)$(CONFIG_PACKAGE_kmod-qca-nss-ecm-noload)$(CONFIG_PACKAGE_kmod-qca-nss-ecm-premium-noload)$(CONFIG_PACKAGE_kmod-qca-nss-ecm-standard)
 
 define KernelPackage/shortcut-fe-cm
   SECTION:=kernel
@@ -47,29 +55,25 @@ define KernelPackage/shortcut-fe-cm
   SUBMENU:=Network Support
   DEPENDS:=+kmod-ipt-conntrack +kmod-shortcut-fe
   TITLE:=Kernel driver for SFE
-  FILES:=$(PKG_BUILD_DIR)/$(PKG_NAME)-cm.ko
-  KCONFIG:=CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y
+  FILES:=$(PKG_BUILD_DIR)/shortcut-fe-cm.ko
+  KCONFIG:= \
+	   CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y \
+	   CONFIG_NF_CONNTRACK_EVENTS=y \
+	   CONFIG_XFRM=y
+  CONFLICTS:=kmod-shortcut-fe-drv
 endef
 
 define KernelPackage/shortcut-fe-cm/Description
 Simple connection manager for the Shortcut forwarding engine.
 endef
 
-# EXTRA_CFLAGS+=-DSFE_SUPPORT_IPV6
-# EXTRA_CFLAGS+=-DSFE_SUPPORT_CM
-
-define Build/Prepare
-	rm -rf $(PKG_BUILD_DIR)
-	mkdir -p $(PKG_BUILD_DIR)
-	$(CP) src/* $(PKG_BUILD_DIR)/ -fr
-endef
-
 define Build/Compile
-	$(MAKE) -C "$(LINUX_DIR)" \
-		CROSS_COMPILE="$(TARGET_CROSS)" \
-		ARCH="$(LINUX_KARCH)" \
-		SUBDIRS="$(PKG_BUILD_DIR)" \
-		EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
+	$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" \
+		$(KERNEL_MAKE_FLAGS) \
+		$(PKG_MAKE_FLAGS) \
+		M="$(PKG_BUILD_DIR)" \
+		EXTRA_CFLAGS+="-DSFE_SUPPORT_IPV6" SFE_SUPPORT_IPV6=y \
+		$(if $(HAVE_ECM),EXTRA_CFLAGS+="-DCONFIG_SFE_ECM" CONFIG_SFE_ECM=y,) \
 		modules
 endef
 
